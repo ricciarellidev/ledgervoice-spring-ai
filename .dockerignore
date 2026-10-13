@@ -1,0 +1,9 @@
+target
+var
+.git
+.env
+.env.*
+.idea
+.vscode
+*.log
+*.zip

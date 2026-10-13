@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">LedgerVoice — voice to budget, with a review step</title>
+  <desc id="desc">Spring AI budgeting reference API. Interpret a command, review a proposal, confirm the record.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101c2c"/><stop offset="1" stop-color="#25264c"/></linearGradient></defs>
+  <rect width="1200" height="320" rx="16" fill="url(#bg)"/>
+  <rect x="48" y="45" width="46" height="46" rx="12" fill="#afa9ff"/>
+  <path d="M62 58v22h19v-6H68V58Z" fill="#172138"/>
+  <text x="110" y="74" fill="#aebbd0" font-family="Arial,Helvetica,sans-serif" font-size="14" letter-spacing="3">SPRING AI / BUDGETING</text>
+  <text x="48" y="159" fill="#f7f8fc" font-family="Arial,Helvetica,sans-serif" font-size="58" font-weight="700" letter-spacing="-2">LedgerVoice</text>
+  <text x="48" y="207" fill="#dce1ee" font-family="Arial,Helvetica,sans-serif" font-size="24">Voice to budget. With a review step.</text>
+  <text x="48" y="268" fill="#b7b1ff" font-family="Arial,Helvetica,sans-serif" font-size="15">INTERPRET  /  REVIEW  /  CONFIRM</text>
+  <rect x="833" y="62" width="307" height="195" rx="22" fill="#121b30" stroke="#5e608a" stroke-opacity=".55"/>
+  <g stroke="#b9b1ff" stroke-width="8" stroke-linecap="round">
+    <path d="M874 146v27M894 125v69M914 106v107M934 135v49M954 145v28M974 115v88M994 134v51"/>
+  </g>
+  <circle cx="1072" cy="160" r="30" fill="#abebe4"/>
+  <path d="m1059 160 9 9 17-19" fill="none" stroke="#1c3445" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="861" y="237" fill="#9dadc6" font-family="Arial,Helvetica,sans-serif" font-size="12" letter-spacing="2">A PROPOSAL IS NOT A RECORD</text>
+</svg>

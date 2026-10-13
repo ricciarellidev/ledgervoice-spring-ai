@@ -1,0 +1,411 @@
+openapi: 3.1.0
+info:
+  title: LedgerVoice Reference API
+  version: 1.0.0
+  summary: Interpret a budget command, review a proposal, confirm a record
+  description: |
+    Local single-user educational API, with BRL amounts. No authentication,
+    tenant isolation, bank integration or public deployment is provided.
+    Demo uses an explicit text grammar; live requires a server-side provider key.
+    AI tools can prepare proposals and read confirmed data, but cannot confirm.
+    Provider requests may incur charges. Use synthetic data.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Assistant
+  - name: Proposals
+  - name: Ledger
+paths:
+  /api/v1/assistant/commands:
+    post:
+      operationId: interpretText
+      tags: [Assistant]
+      summary: Interpret one text command without committing a ledger entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1, maxLength: 2000}
+            examples:
+              demo:
+                value: {text: 'despesa;42,90;FOOD;Almoço;hoje'}
+              live:
+                value: {text: 'Registre meu almoço de 42,90 reais em alimentação hoje.'}
+      responses:
+        '200':
+          description: A proposal, a query result or clarification; no transaction is committed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistantReply'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/assistant/audio:
+    post:
+      operationId: interpretAudio
+      tags: [Assistant]
+      summary: Transcribe an audio file and interpret its command in live mode
+      description: |
+        Maximum 5 MiB. WAV, MP3, M4A and WebM extension/container signatures are
+        allowlisted. This does not validate the full media stream. A safe
+        server-generated filename is forwarded. Demo returns 503.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '200':
+          description: Transcript and typed tool result; any proposal still requires review
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssistantReply'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/assistant/speech:
+    post:
+      operationId: generateSpeech
+      tags: [Assistant]
+      summary: Generate AI-origin MP3 from text in live mode
+      description: Separate provider operation; never confirms a proposal. Demo returns 503.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200':
+          description: AI-generated speech; disclose its origin when playing it
+          headers:
+            X-Audio-Origin:
+              schema: {type: string, const: AI-generated}
+          content:
+            audio/mpeg:
+              schema: {type: string, format: binary}
+        '400': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/proposals:
+    post:
+      operationId: prepareManualProposal
+      tags: [Proposals]
+      summary: Prepare a structured proposal using the same domain rules as AI tools
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Draft'}
+            example:
+              direction: EXPENSE
+              amount: 42.90
+              category: FOOD
+              description: Almoço fictício
+              occurredOn: '2026-10-13'
+      responses:
+        '201':
+          description: Pending proposal created with a 15-minute review window
+          headers:
+            Location:
+              schema: {type: string, format: uri-reference}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Proposal'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/proposals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: getProposal
+      tags: [Proposals]
+      summary: Inspect proposal fields and its current state
+      responses:
+        '200':
+          description: Proposal found; expired proposals remain inspectable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Proposal'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/proposals/{id}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      operationId: confirmProposal
+      tags: [Proposals]
+      summary: Explicitly confirm one reviewed proposal, or replay its receipt
+      description: |
+        No request body. The proposal ID is the replay identity. A database
+        row lock and unique constraint protect one committed transaction per
+        proposal. Receipt, proposal link and audit share a transaction.
+        Confirmed receipts remain replayable after expiry. Repeating a text or
+        audio command creates a NEW proposal, not a replay of this operation.
+      responses:
+        '201':
+          description: First confirmation committed
+          headers:
+            Confirmation-Replayed:
+              schema: {type: string, const: 'false'}
+            Location:
+              schema: {type: string, format: uri-reference}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Transaction'}
+        '200':
+          description: Previously confirmed receipt returned unchanged
+          headers:
+            Confirmation-Replayed:
+              schema: {type: string, const: 'true'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Transaction'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '410': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/proposals/{id}/audit:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: getProposalAudit
+      tags: [Proposals]
+      summary: Read the newest 100 audit events for an existing proposal
+      responses:
+        '200':
+          description: Event metadata ordered by timestamp and ID descending
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items: {$ref: '#/components/schemas/AuditEvent'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/transactions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: getTransaction
+      tags: [Ledger]
+      summary: Retrieve a confirmed ledger entry
+      responses:
+        '200':
+          description: Confirmed transaction
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Transaction'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/transactions:
+    get:
+      operationId: listTransactions
+      tags: [Ledger]
+      summary: Query confirmed entries for a month, with optional category
+      parameters:
+        - $ref: '#/components/parameters/Month'
+        - name: category
+          in: query
+          schema: {$ref: '#/components/schemas/Category'}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 0, maximum: 10000, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Bounded page of confirmed records, newest occurrence first
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TransactionPage'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+  /api/v1/summary:
+    get:
+      operationId: getMonthlySummary
+      tags: [Ledger]
+      summary: Exact confirmed income, expenses, net and count for a month
+      parameters:
+        - $ref: '#/components/parameters/Month'
+      responses:
+        '200':
+          description: BRL totals; all values are zero for an empty month
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonthlySummary'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Month:
+      name: month
+      in: query
+      required: false
+      description: yyyy-MM, years 2000-2100; defaults to the current America/Sao_Paulo month
+      schema: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: '2026-10'}
+  responses:
+    Problem:
+      description: |
+        RFC 9457 error. Code distinguishes invalid input (400), missing record
+        (404), expired proposal (410), upload limit (413), domain rejection
+        (422), AI command failure (502), demo audio unavailable (503) or internal
+        failure (500). Internal exception details and rejected values are not echoed.
+      headers:
+        X-Correlation-Id:
+          description: Allowlisted incoming identifier, or a generated UUID
+          schema: {type: string, pattern: '^[A-Za-z0-9._-]{1,100}$'}
+        Cache-Control:
+          schema: {type: string, const: no-store}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Direction:
+      type: string
+      enum: [INCOME, EXPENSE]
+    Category:
+      type: string
+      enum: [FOOD, HOUSING, TRANSPORT, HEALTH, LEISURE, EDUCATION, SALARY, OTHER]
+    Source:
+      type: string
+      enum: [MANUAL, TEXT, AUDIO]
+    Draft:
+      type: object
+      required: [direction, amount, category, description, occurredOn]
+      properties:
+        direction: {$ref: '#/components/schemas/Direction'}
+        amount:
+          type: number
+          minimum: 0.01
+          maximum: 1000000
+          multipleOf: 0.01
+          description: Positive BRL value, stored at decimal scale 2; no silent rounding
+        category: {$ref: '#/components/schemas/Category'}
+        description:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Trimmed, nonblank text without control characters
+        occurredOn:
+          type: string
+          format: date
+          description: From 2000-01-01 through today in America/Sao_Paulo; future bookings unsupported
+    Proposal:
+      type: object
+      required: [id, draft, currency, source, status, createdAt, expiresAt]
+      properties:
+        id: {type: string, format: uuid}
+        draft: {$ref: '#/components/schemas/Draft'}
+        currency: {type: string, const: BRL}
+        source: {$ref: '#/components/schemas/Source'}
+        status: {type: string, enum: [PENDING, CONFIRMED, EXPIRED]}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+        transactionId:
+          type: string
+          format: uuid
+          description: Present only after confirmation
+    Transaction:
+      type: object
+      required: [id, proposalId, details, currency, source, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        proposalId: {type: string, format: uuid}
+        details: {$ref: '#/components/schemas/Draft'}
+        currency: {type: string, const: BRL}
+        source: {$ref: '#/components/schemas/Source'}
+        createdAt: {type: string, format: date-time}
+    MonthlySummary:
+      type: object
+      required: [month, currency, income, expenses, net, transactionCount]
+      properties:
+        month: {type: string, example: '2026-10'}
+        currency: {type: string, const: BRL}
+        income: {type: number, minimum: 0}
+        expenses: {type: number, minimum: 0}
+        net: {type: number, description: 'Income minus expenses; may be negative'}
+        transactionCount: {type: integer, minimum: 0}
+    TransactionPage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/Transaction'}
+        total: {type: integer, minimum: 0}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+    AssistantReply:
+      type: object
+      required: [mode, source, answer, requiresConfirmation, proposals]
+      properties:
+        mode: {type: string, enum: [DEMO, LIVE]}
+        source: {type: string, enum: [TEXT, AUDIO]}
+        transcript:
+          type: string
+          description: Present for audio; returned to the caller, not retained in the application database
+        answer: {type: string, description: 'Server-generated text derived from the actual tool result'}
+        requiresConfirmation: {type: boolean}
+        proposals:
+          type: array
+          maxItems: 1
+          items: {$ref: '#/components/schemas/Proposal'}
+        summary: {$ref: '#/components/schemas/MonthlySummary'}
+        transactions: {$ref: '#/components/schemas/TransactionPage'}
+    AuditEvent:
+      type: object
+      required: [id, proposalId, action, occurredAt]
+      properties:
+        id: {type: string, format: uuid}
+        proposalId: {type: string, format: uuid}
+        action: {type: string, enum: [PROPOSAL_CREATED, TRANSACTION_CONFIRMED, CONFIRMATION_REPLAYED]}
+        occurredAt: {type: string, format: date-time}
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance, code, correlationId]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string}
+        instance: {type: string, format: uri-reference}
+        code: {type: string}
+        correlationId: {type: string}
+        violations:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: {type: string}
+              message: {type: string}

@@ -1,0 +1,7 @@
+ledger:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    chat-model: ${OPENAI_CHAT_MODEL:gpt-4.1-mini}
+    transcription-model: ${OPENAI_TRANSCRIPTION_MODEL:gpt-4o-mini-transcribe}
+    speech-model: ${OPENAI_SPEECH_MODEL:gpt-4o-mini-tts}

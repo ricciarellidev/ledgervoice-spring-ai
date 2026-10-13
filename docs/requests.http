@@ -1,0 +1,78 @@
+@baseUrl = http://localhost:8080
+@month = 2026-10
+@proposalId = replace-with-the-reviewed-proposal-id
+
+### Demo: current local date, no credentials. Proposal is NOT a ledger entry.
+POST {{baseUrl}}/api/v1/assistant/commands
+Content-Type: application/json
+X-Correlation-Id: demo_001
+
+{"text":"despesa;42,90;FOOD;Almoço;hoje"}
+
+### Inspect the proposed fields; copy proposals[0].id into proposalId above.
+GET {{baseUrl}}/api/v1/proposals/{{proposalId}}
+
+### Confirm after review. Repeat to get 200 + Confirmation-Replayed: true.
+POST {{baseUrl}}/api/v1/proposals/{{proposalId}}/confirm
+
+### Audit metadata (newest 100 events)
+GET {{baseUrl}}/api/v1/proposals/{{proposalId}}/audit
+
+### Current month totals, independent of the fixed example month above
+GET {{baseUrl}}/api/v1/summary
+
+### Bounded query; adjust month as needed
+GET {{baseUrl}}/api/v1/transactions?month={{month}}&category=FOOD&page=0&size=20
+
+### Demo: query the configured month
+POST {{baseUrl}}/api/v1/assistant/commands
+Content-Type: application/json
+
+{"text":"resumo;{{month}}"}
+
+### Structured manual proposal. Historical fixture date; do not claim current data.
+POST {{baseUrl}}/api/v1/proposals
+Content-Type: application/json
+
+{"direction":"INCOME","amount":3500.00,"category":"SALARY","description":"Salário fictício","occurredOn":"2026-10-01"}
+
+### Invalid amount -> 400
+POST {{baseUrl}}/api/v1/proposals
+Content-Type: application/json
+
+{"direction":"EXPENSE","amount":-2,"category":"FOOD","description":"Almoço","occurredOn":"2026-10-01"}
+
+### Future date -> 422 (future relative to this project's verification date)
+POST {{baseUrl}}/api/v1/proposals
+Content-Type: application/json
+
+{"direction":"EXPENSE","amount":20,"category":"FOOD","description":"Almoço","occurredOn":"2099-01-01"}
+
+### Invalid period -> 400
+GET {{baseUrl}}/api/v1/summary?month=2026-13
+
+### Live: requires active live profile + server-side API key. Can incur provider charges.
+POST {{baseUrl}}/api/v1/assistant/commands
+Content-Type: application/json
+
+{"text":"Registre meu almoço de 42 reais e 90 centavos em alimentação hoje."}
+
+### Live audio: set a local WAV path below. Demo returns 503.
+POST {{baseUrl}}/api/v1/assistant/audio
+Content-Type: multipart/form-data; boundary=LedgerVoiceBoundary
+
+--LedgerVoiceBoundary
+Content-Disposition: form-data; name="file"; filename="command.wav"
+Content-Type: audio/wav
+
+< /path/to/your/command.wav
+--LedgerVoiceBoundary--
+
+### Live speech: binary MP3 with X-Audio-Origin: AI-generated. Demo returns 503.
+POST {{baseUrl}}/api/v1/assistant/speech
+Content-Type: application/json
+
+{"text":"Proposta pronta para revisão. Confira os dados antes de confirmar."}
+
+### Local health
+GET {{baseUrl}}/actuator/health
